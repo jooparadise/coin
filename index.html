@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DFW Coin Laundry Market Map v5.1 – Location Checker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQK7nVYtR3J3Hc3LkI3uEw7PkkPewA=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    :root { --blue:#0b5fff; --dark:#172033; --muted:#667085; --line:#e6eaf0; --bg:#f6f8fb; --green:#16a34a; --yellow:#f59e0b; --red:#dc2626; }
+    html, body { height:100%; margin:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:var(--dark); background:var(--bg); }
+    .app { display:grid; grid-template-columns: 430px 1fr; height:100%; }
+    aside { overflow:auto; background:white; border-right:1px solid var(--line); padding:18px; box-sizing:border-box; }
+    #map { height:100%; width:100%; }
+    h1 { font-size:20px; line-height:1.25; margin:0 0 8px; }
+    h2 { font-size:15px; margin:20px 0 10px; }
+    .subtitle { font-size:12px; color:var(--muted); line-height:1.5; }
+    .panel { border:1px solid var(--line); border-radius:14px; padding:14px; margin-top:14px; background:#fff; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    label { display:block; font-size:12px; font-weight:700; margin:10px 0 6px; }
+    input, select { width:100%; box-sizing:border-box; padding:10px 11px; border:1px solid #cfd7e3; border-radius:10px; font-size:14px; outline:none; }
+    input:focus, select:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(11,95,255,.12); }
+    button { border:0; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer; }
+    .primary { background:var(--blue); color:white; width:100%; margin-top:10px; }
+    .secondary { background:#eef4ff; color:#1849a9; }
+    .danger { background:#fff1f1; color:#b42318; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .small { font-size:12px; color:var(--muted); line-height:1.45; }
+    .kpis { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+    .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:12px; padding:10px; }
+    .kpi b { display:block; font-size:20px; margin-top:2px; }
+    .badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; font-weight:800; }
+    .badge.green { background:#dcfce7; color:#166534; }
+    .badge.yellow { background:#fef3c7; color:#92400e; }
+    .badge.red { background:#fee2e2; color:#991b1b; }
+    .badge.blue { background:#dbeafe; color:#1e40af; }
+    .list { margin:8px 0 0; padding-left:18px; font-size:13px; line-height:1.55; }
+    .status { margin-top:8px; font-size:12px; color:var(--muted); }
+    .legend { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .dot { width:10px; height:10px; display:inline-block; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    .leaflet-popup-content { font-family: inherit; }
+    .popup-title { font-weight:800; font-size:14px; margin-bottom:4px; }
+    .popup-meta { font-size:12px; color:#475467; line-height:1.45; }
+    .link { color:#0b5fff; text-decoration:none; font-weight:700; }
+    .warn { background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:10px; font-size:12px; color:#9a3412; line-height:1.45; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { border-bottom:1px solid var(--line); padding:7px 4px; text-align:left; }
+    th { color:#475467; }
+    @media(max-width: 960px) { .app { grid-template-columns:1fr; grid-template-rows:auto 62vh; } aside { max-height:48vh; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>DFW Coin Laundry Market Map v5.1</h1>
+    <div class="subtitle">Existing POI + demand_score + proposed sites + new address-based investment checker. Public site mode: no Google API key is exposed in the browser.</div>
+
+    <div class="panel">
+      <h2>Location Check</h2>
+      <div class="warn">주소 입력 기능은 기본적으로 OpenStreetMap Nominatim geocoding을 사용합니다. 경쟁업체 수는 기본 2-mile 반경으로 계산하며, 필요 시 1/3/5 miles로 변경할 수 있습니다. Google Places API key는 GitHub Secret에서 검증용 workflow에만 사용하세요.</div>
+      <label>검토할 주소</label>
+      <input id="addressInput" placeholder="예: 123 Main St, Carrollton, TX" />
+      <div class="row">
+        <div>
+          <label>경쟁 반경</label>
+          <select id="radiusSelect"><option value="1">1 mile</option><option value="2" selected>2 miles</option><option value="3">3 miles</option><option value="5">5 miles</option></select>
+        </div>
+        <div>
+          <label>경쟁 계산</label>
+          <select id="competitionMode"><option value="all" selected>All POI + seeds</option><option value="named">Named POI only</option></select>
+        </div>
+      </div>
+      <button class="primary" onclick="checkAddress()">주소 분석하기</button>
+      <div class="row" style="margin-top:8px;">
+        <button class="secondary" onclick="useMapCenter()">현재 지도 중심 분석</button>
+        <button class="danger" onclick="clearCheck()">분석 지우기</button>
+      </div>
+      <div id="checkStatus" class="status"></div>
+      <div id="analysisResult"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Map filters</h2>
+      <label><input type="checkbox" id="showExisting" checked onchange="renderLayers()" style="width:auto;"> Existing POI</label>
+      <label><input type="checkbox" id="showProposed" checked onchange="renderLayers()" style="width:auto;"> Proposed sites</label>
+      <label><input type="checkbox" id="showRadius" checked onchange="renderLayers()" style="width:auto;"> 3-mile circles for proposed sites</label>
+      <label>Show existing records</label>
+      <select id="existingFilter" onchange="renderLayers()"><option value="all">All existing model records</option><option value="named">Named/listed only</option><option value="green">Green demand only</option><option value="yellow">Yellow demand only</option><option value="red">Red demand only</option></select>
+      <div class="legend"><span><span class="dot" style="background:#16a34a"></span>High</span><span><span class="dot" style="background:#f59e0b"></span>Medium</span><span><span class="dot" style="background:#dc2626"></span>Low</span><span><span class="dot" style="background:#2563eb"></span>Proposed</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Model summary</h2>
+      <div class="kpis"><div class="kpi">Existing model rows<b id="kpiExisting">—</b></div><div class="kpi">Proposed sites<b id="kpiProposed">—</b></div><div class="kpi">Avg demand<b id="kpiDemand">—</b></div><div class="kpi">Green zones<b id="kpiGreen">—</b></div></div>
+      <p class="small">C급 density seed는 시장 밀도 과소평가를 막기 위한 모델 레코드입니다. 실제 운영 매장 확정은 Google Places 검증 결과를 우선해야 합니다.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Top nearby competitors</h2>
+      <div id="nearbyTable" class="small">주소 분석 후 표시됩니다.</div>
+    </div>
+  </aside>
+  <main><div id="map"></div></main>
+</div>
+<script>
+const DATA_URLS = [
+  'data/DFW_Coin_Laundry_v4_GooglePlaces_Verified.json',
+  'data/DFW_Coin_Laundry_v3_DemandScore_Expanded.json'
+];
+let DATA = {existing_poi:[], proposed_sites:[], city_summary:[]};
+let map, existingLayer, proposedLayer, radiusLayer, checkLayer;
+let lastCheck = null;
+
+function colorForScore(score){ score=Number(score)||0; if(score>=75) return '#16a34a'; if(score>=60) return '#f59e0b'; return '#dc2626'; }
+function labelForScore(score){ score=Number(score)||0; if(score>=75) return ['green','Strong demand']; if(score>=60) return ['yellow','Moderate demand']; return ['red','Weak/uncertain demand']; }
+function toRad(d){ return d*Math.PI/180; }
+function miles(aLat,aLon,bLat,bLon){ const R=3958.7613; const dLat=toRad(bLat-aLat), dLon=toRad(bLon-aLon); const s=Math.sin(dLat/2)**2+Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
+function fmt(n,d=1){ if(n===undefined||n===null||isNaN(Number(n))) return '—'; return Number(n).toFixed(d); }
+function mapsUrl(lat,lon){ return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`; }
+function recordLat(r){ return Number(r.lat ?? r.latitude); }
+function recordLon(r){ return Number(r.lon ?? r.lng ?? r.longitude); }
+function isNamed(r){ return String(r.record_type||'').includes('named') || String(r.poi_confidence||'').startsWith('A') || String(r.poi_confidence||'').startsWith('B'); }
+
+async function loadData(){
+  for (const url of DATA_URLS){
+    try { const res = await fetch(url, {cache:'no-store'}); if(res.ok){ DATA = await res.json(); document.getElementById('checkStatus').textContent = `Loaded ${url}`; return; } } catch(e) {}
+  }
+  document.getElementById('checkStatus').textContent = '데이터 JSON을 불러오지 못했습니다. data 폴더 경로를 확인하세요.';
+}
+function initMap(){
+  map = L.map('map', {preferCanvas:true}).setView([32.80,-96.85], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+  existingLayer = L.layerGroup().addTo(map); proposedLayer=L.layerGroup().addTo(map); radiusLayer=L.layerGroup().addTo(map); checkLayer=L.layerGroup().addTo(map);
+}
+function popupForExisting(r){
+  const lat=recordLat(r), lon=recordLon(r);
+  return `<div class="popup-title">${r.business_name||r.poi_id||'Existing POI'}</div><div class="popup-meta">${r.address||''}, ${r.city||''} ${r.state||''}<br>Demand: <b>${fmt(r.demand_score_0_100,1)}</b> · Opportunity: <b>${fmt(r.opportunity_score_0_100,1)}</b><br>3mi competition: <b>${r.competition_3mi ?? '—'}</b> · Confidence: ${r.poi_confidence||'—'}<br><a class="link" target="_blank" href="${r.google_maps_url || mapsUrl(lat,lon)}">Open in Google Maps</a></div>`;
+}
+function popupForProposed(r){
+  const lat=recordLat(r), lon=recordLon(r);
+  return `<div class="popup-title">★ ${r.site_name||r.business_name||'Proposed site'}</div><div class="popup-meta">${r.address||''}, ${r.city||''}<br>Demand: <b>${fmt(r.demand_score_0_100,1)}</b> · Opportunity: <b>${fmt(r.opportunity_score_0_100,1)}</b><br>Reason: ${r.recommendation_reason||r.notes||'Model-based proposed location'}<br><a class="link" target="_blank" href="${r.google_maps_url || mapsUrl(lat,lon)}">Open in Google Maps</a></div>`;
+}
+function renderLayers(){
+  existingLayer.clearLayers(); proposedLayer.clearLayers(); radiusLayer.clearLayers();
+  const showExisting=document.getElementById('showExisting').checked;
+  const showProposed=document.getElementById('showProposed').checked;
+  const showRadius=document.getElementById('showRadius').checked;
+  const filter=document.getElementById('existingFilter').value;
+  if(showExisting){
+    DATA.existing_poi.forEach(r=>{
+      const lat=recordLat(r), lon=recordLon(r); if(!lat||!lon) return;
+      if(filter==='named' && !isNamed(r)) return;
+      if(['green','yellow','red'].includes(filter) && String(r.map_color||'').toLowerCase()!==filter) return;
+      const score=Number(r.demand_score_0_100)||0;
+      L.circleMarker([lat,lon], {radius:isNamed(r)?5:3, color:colorForScore(score), fillColor:colorForScore(score), fillOpacity:isNamed(r)?.8:.38, weight:1}).bindPopup(popupForExisting(r)).addTo(existingLayer);
+    });
+  }
+  if(showProposed){
+    DATA.proposed_sites.forEach(r=>{ const lat=recordLat(r), lon=recordLon(r); if(!lat||!lon) return;
+      L.marker([lat,lon], {title:r.site_name||'Proposed'}).bindPopup(popupForProposed(r)).addTo(proposedLayer);
+      if(showRadius){ L.circle([lat,lon], {radius:4828.03, color:'#2563eb', weight:1, fillOpacity:.03}).addTo(radiusLayer); }
+    });
+  }
+  updateKpis();
+}
+function updateKpis(){
+  const ex=DATA.existing_poi||[], pr=DATA.proposed_sites||[];
+  document.getElementById('kpiExisting').textContent = ex.length;
+  document.getElementById('kpiProposed').textContent = pr.length;
+  const avg = ex.reduce((s,r)=>s+(Number(r.demand_score_0_100)||0),0)/Math.max(1,ex.length);
+  document.getElementById('kpiDemand').textContent = fmt(avg,1);
+  document.getElementById('kpiGreen').textContent = ex.filter(r=>(Number(r.demand_score_0_100)||0)>=75).length;
+}
+async function geocodeAddress(address){
+  const q = encodeURIComponent(address + ', USA');
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=${q}`;
+  const res = await fetch(url, {headers:{'Accept':'application/json'}});
+  if(!res.ok) throw new Error('Geocoding request failed');
+  const arr = await res.json();
+  if(!arr.length) throw new Error('주소를 찾지 못했습니다. 도시/주까지 더 구체적으로 입력해 주세요.');
+  return {lat:Number(arr[0].lat), lon:Number(arr[0].lon), display_name: arr[0].display_name};
+}
+function getCompetition(lat,lon,radiusMi,mode){
+  return DATA.existing_poi.map(r=>({r, dist:miles(lat,lon,recordLat(r),recordLon(r))}))
+    .filter(x=>Number.isFinite(x.dist) && x.dist<=radiusMi && (mode==='all' || isNamed(x.r)))
+    .sort((a,b)=>a.dist-b.dist);
+}
+function weightedEstimate(lat,lon){
+  const fields=['median_household_income_est','renter_pct_est','multifamily_pct_est','no_vehicle_pct_est','population_density_est','hispanic_pct_est','black_pct_est','immigrant_language_proxy_pct_est'];
+  const candidates=DATA.existing_poi.map(r=>({r, dist:miles(lat,lon,recordLat(r),recordLon(r))})).filter(x=>Number.isFinite(x.dist) && x.dist<=6).sort((a,b)=>a.dist-b.dist).slice(0,80);
+  const out={};
+  if(!candidates.length){ fields.forEach(f=>out[f]=null); return out; }
+  fields.forEach(f=>{ let num=0, den=0; candidates.forEach(x=>{ const v=Number(x.r[f]); if(!isNaN(v)){ const w=1/Math.max(.25,x.dist); num+=v*w; den+=w; }}); out[f]=den?num/den:null; });
+  return out;
+}
+function scoreLocation(est, compCount, nearest, radiusMi){
+  const income = Number(est.median_household_income_est)||65000;
+  const renter = Number(est.renter_pct_est)||35;
+  const multi = Number(est.multifamily_pct_est)||30;
+  const noVeh = Number(est.no_vehicle_pct_est)||5;
+  const density = Number(est.population_density_est)||3500;
+  const eth = Number(est.immigrant_language_proxy_pct_est)||20;
+  const incomeScore = Math.max(0, Math.min(100, 100 - Math.abs(income-55000)/55000*100));
+  const renterScore = Math.max(0, Math.min(100, (renter-25)/45*100));
+  const multiScore = Math.max(0, Math.min(100, (multi-20)/55*100));
+  const noVehScore = Math.max(0, Math.min(100, noVeh/18*100));
+  const densityScore = Math.max(0, Math.min(100, (density-2500)/6500*100));
+  const ethScore = Math.max(0, Math.min(100, eth/45*100));
+  const compPenaltyBase = radiusMi===1 ? 3 : radiusMi===2 ? 7 : radiusMi===3 ? 12 : 22;
+  const competitionScore = Math.max(0, Math.min(100, 100 - (compCount/compPenaltyBase)*100 + Math.min(15, (nearest||0)*6)));
+  const demand = .25*renterScore + .20*multiScore + .15*incomeScore + .15*densityScore + .10*noVehScore + .05*ethScore + .10*competitionScore;
+  const saturationPenalty = Math.max(0, compCount - compPenaltyBase*.75) * 3;
+  const opportunity = Math.max(0, Math.min(100, demand - saturationPenalty + Math.min(10, (nearest||0)*2)));
+  return {incomeScore,renterScore,multiScore,noVehScore,densityScore,ethScore,competitionScore,demand,opportunity};
+}
+function verdict(demand, opportunity, compCount, nearest){
+  if(opportunity>=72 && demand>=70 && compCount<=12) return ['green','Strong candidate / 투자 검토 가치 높음'];
+  if(opportunity>=58 && demand>=60) return ['yellow','Conditional candidate / 조건부 검토'];
+  if(demand>=70 && compCount>18) return ['yellow','Demand is high but saturated / 수요는 있으나 경쟁 과다'];
+  return ['red','Weak or high-risk / 보수적 접근'];
+}
+function renderAnalysis(point, sourceLabel){
+  const radiusMi=Number(document.getElementById('radiusSelect').value);
+  const mode=document.getElementById('competitionMode').value;
+  const comps=getCompetition(point.lat, point.lon, radiusMi, mode);
+  const nearest=comps[0]?.dist ?? null;
+  const est=weightedEstimate(point.lat, point.lon);
+  const sc=scoreLocation(est, comps.length, nearest, radiusMi);
+  const [badge, text]=verdict(sc.demand, sc.opportunity, comps.length, nearest);
+  const [dBadge, dText]=labelForScore(sc.demand);
+  lastCheck={point, comps, est, sc};
+  checkLayer.clearLayers();
+  const marker=L.marker([point.lat,point.lon]).bindPopup(`<div class="popup-title">Location Check</div><div class="popup-meta">${sourceLabel}<br>Demand ${fmt(sc.demand,1)} · Opportunity ${fmt(sc.opportunity,1)}<br><a class="link" target="_blank" href="${mapsUrl(point.lat,point.lon)}">Open in Google Maps</a></div>`).addTo(checkLayer);
+  L.circle([point.lat,point.lon], {radius:radiusMi*1609.344, color:'#111827', weight:2, fillOpacity:.04}).addTo(checkLayer);
+  marker.openPopup(); map.setView([point.lat, point.lon], 13);
+  document.getElementById('analysisResult').innerHTML = `
+    <div class="panel" style="margin:12px 0 0; padding:12px;">
+      <span class="badge ${badge}">${text}</span>
+      <div class="kpis">
+        <div class="kpi">Demand score<b>${fmt(sc.demand,1)}</b><span class="badge ${dBadge}">${dText}</span></div>
+        <div class="kpi">Opportunity<b>${fmt(sc.opportunity,1)}</b></div>
+        <div class="kpi">Existing POI ${radiusMi}mi<b>${comps.length}</b></div>
+        <div class="kpi">Nearest competitor<b>${nearest===null?'—':fmt(nearest,2)+' mi'}</b></div>
+      </div>
+      <ul class="list">
+        <li>Estimated median income: <b>$${fmt(est.median_household_income_est,0)}</b></li>
+        <li>Renter / multifamily: <b>${fmt(est.renter_pct_est,1)}%</b> / <b>${fmt(est.multifamily_pct_est,1)}%</b></li>
+        <li>No-vehicle households: <b>${fmt(est.no_vehicle_pct_est,1)}%</b>; population density estimate: <b>${fmt(est.population_density_est,0)}</b>/sq mi</li>
+        <li>Investment interpretation: ${interpret(sc, comps.length, nearest)}</li>
+      </ul>
+      <a class="link" target="_blank" href="${mapsUrl(point.lat,point.lon)}">Google Maps에서 위치 열기</a>
+    </div>`;
+  renderNearbyTable(comps.slice(0,10));
+}
+function interpret(sc, compCount, nearest){
+  if(sc.opportunity>=72) return '수요 proxy와 경쟁 여백이 모두 양호합니다. 다음 단계는 임대료, 주차, 유틸리티, visibility, 24-hour 운영 가능 여부 확인입니다.';
+  if(sc.demand>=70 && compCount>14) return '수요는 충분하지만 경쟁 밀도가 높습니다. 차별화된 대형 매장, wash & fold, 픽업/딜리버리, 장비 규모로 이길 수 있는지 검토해야 합니다.';
+  if(sc.demand>=60) return '기본 수요는 있지만 입지 조건 확인이 중요합니다. 가장 가까운 경쟁업체와의 거리, 교통 접근성, anchor tenant를 함께 보세요.';
+  return '현재 모델상 수요 또는 경쟁 조건이 약합니다. 매우 낮은 rent나 특수 traffic driver가 없다면 우선순위를 낮추는 것이 안전합니다.';
+}
+function renderNearbyTable(rows){
+  if(!rows.length){ document.getElementById('nearbyTable').innerHTML='선택 반경 안 existing POI가 없습니다.'; return; }
+  document.getElementById('nearbyTable').innerHTML = `<table><thead><tr><th>mi</th><th>Name</th><th>City</th><th>Score</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${fmt(x.dist,2)}</td><td>${x.r.business_name||x.r.poi_id||'POI'}</td><td>${x.r.city||''}</td><td>${fmt(x.r.demand_score_0_100,1)}</td></tr>`).join('')}</tbody></table>`;
+}
+async function checkAddress(){
+  const address=document.getElementById('addressInput').value.trim();
+  if(!address){ document.getElementById('checkStatus').textContent='주소를 입력해 주세요.'; return; }
+  document.getElementById('checkStatus').textContent='주소를 찾고 분석 중입니다...';
+  try { const p=await geocodeAddress(address); document.getElementById('checkStatus').textContent='주소 확인 완료: '+p.display_name; renderAnalysis(p, p.display_name); }
+  catch(e){ document.getElementById('checkStatus').textContent='오류: '+e.message; }
+}
+function useMapCenter(){ const c=map.getCenter(); renderAnalysis({lat:c.lat,lon:c.lng,display_name:'Map center'}, 'Map center'); document.getElementById('checkStatus').textContent='현재 지도 중심 좌표를 분석했습니다.'; }
+function clearCheck(){ checkLayer.clearLayers(); document.getElementById('analysisResult').innerHTML=''; document.getElementById('nearbyTable').innerHTML='주소 분석 후 표시됩니다.'; document.getElementById('checkStatus').textContent='분석을 지웠습니다.'; }
+
+(async function(){ initMap(); await loadData(); renderLayers(); })();
+</script>
+</body>
+</html>
