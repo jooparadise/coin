@@ -1,5 +1,0 @@
-.env
-__pycache__/
-*.pyc
-.DS_Store
-outputs/raw_google_places_*.json
